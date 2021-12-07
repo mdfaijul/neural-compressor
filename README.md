@@ -997,4 +997,4 @@ Intel® Neural Compressor provides numerous examples to show promising accuracy 
 
 ## Hiring
 
-We are hiring. Please send your resume to [INC Jobs](lpot.maintainers@intel.com) if you have interests in model compression techniques.
+We are hiring. Please send your resume to [Jobs](lpot.maintainers@intel.com) if you have interests in model compression techniques.
