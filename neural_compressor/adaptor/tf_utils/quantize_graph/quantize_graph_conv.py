@@ -116,8 +116,9 @@ class FuseNodeStartWithConv2d(QuantizeNodeBase):
                 self.add_output_graph_node(quantized_conv_node)
                 quantize_down_name = self._add_quantize_down_nodes(
                     node, quantized_node_name, dtypes.qint8)
+                deq_out_type = dtypes.DType(matched_node.node.attr["T"].type)
                 self._intel_cpu_add_dequantize_result_node(
-                    quantize_down_name, node.name, dtypes.qint8)
+                    quantize_down_name, node.name, dtypes.qint8, deq_out_type=deq_out_type)
             else:
                 new_node = node_def_pb2.NodeDef()
                 new_node.CopyFrom(node)

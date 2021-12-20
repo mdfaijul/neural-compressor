@@ -229,7 +229,8 @@ class QuantizeNodeBase():
                                               quantized_output_name,
                                               original_node_name,
                                               dtype=dtypes.quint8,
-                                              min_tensor_index=1):
+                                              min_tensor_index=1,
+                                              deq_out_type=dtypes.float32):
         min_max_inputs = [
             "%s:%s" % (quantized_output_name, min_tensor_index),
             "%s:%s" % (quantized_output_name, min_tensor_index + 1)
@@ -240,6 +241,7 @@ class QuantizeNodeBase():
             "Dequantize", dequantize_name,
             [quantized_output_name, min_max_inputs[0], min_max_inputs[1]])
         helper.set_attr_dtype(dequantize_node, "T", dtype)
+        helper.set_attr_dtype(dequantize_node, "dtype", deq_out_type)
         helper.set_attr_string(dequantize_node, "mode",
                                b"MIN_FIRST" if self.is_asymmetric else b"SCALED")
         self.add_output_graph_node(dequantize_node)
@@ -514,6 +516,27 @@ class QuantizeNodeBase():
         """Takes one float input to an op, and converts it to quantized form."""
         unique_input_name = helper.unique_node_name_from_input(
             original_input_name)
+        temp_name = original_input_name
+        # Original input could be float32/bfloat16, identify it.
+        original_input_node = self.node_name_mapping[original_input_name].node
+        if original_input_node.attr["dtype"].type: # Dequantize op
+          input_dtype = original_input_node.attr["dtype"].type
+        elif original_input_node.attr["DstT"].type: # Cast op
+          input_dtype = original_input_node.attr["DstT"].type
+        elif original_input_node.attr["T"].type: # Common ops
+          input_dtype = original_input_node.attr["T"].type
+        else:
+          raise ValueError("No data type info found.")
+        input_dtype = dtypes.DType(input_dtype)
+        if input_dtype == tf.bfloat16:
+          # Min-Max should be float32, so cast bfloat16 to float32
+          cast_node_name = namespace_prefix + "_cast_" + unique_input_name
+          cast_node = helper.create_node("Cast", cast_node_name, [original_input_name])
+          helper.set_attr_dtype(cast_node, "SrcT", input_dtype)
+          helper.set_attr_dtype(cast_node, "DstT", dtypes.float32)
+          self.add_output_graph_node(cast_node)
+          temp_name = cast_node_name
+
         if unique_input_name in self.quantized_node_dict:
             quantized_tuple = self.quantized_node_dict[unique_input_name]
             return quantized_tuple[0], quantized_tuple[1], quantized_tuple[2]
@@ -538,7 +561,7 @@ class QuantizeNodeBase():
             quantize_input_name = namespace_prefix + "_quantize_" + unique_input_name
             reshape_input_node = helper.create_node(
                 "Reshape", reshape_input_name,
-                [original_input_name, reshape_dims_name])
+                [temp_name, reshape_dims_name])
             helper.set_attr_dtype(reshape_input_node, "T", dtypes.float32)
             self.add_output_graph_node(reshape_input_node)
             min_input_node = helper.create_node(
@@ -558,6 +581,7 @@ class QuantizeNodeBase():
                 [original_input_name, min_input_name, max_input_name])
 
         helper.set_attr_dtype(quantize_input_node, "T", dtype)
+        helper.set_attr_dtype(quantize_input_node, "dtype", input_dtype)
         helper.set_attr_string(quantize_input_node, "mode",
                                b"MIN_FIRST" if self.is_asymmetric else b"SCALED")
         if not self.is_asymmetric:

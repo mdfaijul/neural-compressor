@@ -332,7 +332,7 @@ class QuantizeGraphHelper():
         qint8_const_name = base_name + "qint8_const"
         min_name = base_name + "min"
         max_name = base_name + "max"
-        float_tensor = tensor_util.MakeNdarray(input_node.attr["value"].tensor)
+        float_tensor = tensor_util.MakeNdarray(input_node.attr["value"].tensor).astype(np.float32)
         epsilon = 1e-4  # Needs to be set empirically if accuracy is not satisfactory
         range_coefficent = 127 / (2 ** weight_bit - 1)
         if host_op_type in ("Conv2D", "MatMul"):
